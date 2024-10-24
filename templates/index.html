@@ -1,0 +1,209 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>N2O Emission Map</title>
+    
+    <!-- Include Leaflet CSS and JS -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.3/dist/leaflet.css" />
+    <script src="https://unpkg.com/leaflet@1.9.3/dist/leaflet.js"></script>
+    <script src="https://unpkg.com/leaflet-geosearch@latest/dist/bundle.min.js"></script>
+
+    <!-- Include leaflet-geosearch for search functionality -->
+    <!--<link rel="stylesheet" href="https://unpkg.com/leaflet-geosearch@3.3.2/dist/geosearch.css" />-->
+    <!--<link rel="stylesheet" href="https://unpkg.com/leaflet-control-geocoder/dist/Control.Geocoder.css" />-->
+    <!--<script src="https://unpkg.com/leaflet-geosearch@3.3.2/dist/geosearch.umd.js"></script>-->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet-geosearch@latest/dist/geosearch.css" />
+
+    <!-- Leaflet-Geosearch JS -->
+    
+
+
+
+    <!-- Include Plotly for the charts -->
+    <script src="https://cdn.plot.ly/plotly-latest.min.js"></script>
+    
+    <!-- Include jQuery for AJAX -->
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+    <script src="https://unpkg.com/leaflet-control-geocoder/dist/Control.Geocoder.js"></script>
+
+    <style>
+        /* Responsive map container */
+        #map {
+            width: 100%;
+            height: 100vh;
+            position: relative;
+            z-index: 1;
+        }
+
+        /* Modal styling */
+        .modal {
+            display: none;
+            position: fixed;
+            z-index: 10000;
+            left: 0;
+            top: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.4); /* Modal background */
+        }
+
+        .modal-content {
+            background-color: #fefefe;
+            margin: 5% auto;
+            padding: 20px;
+            border: 1px solid #888;
+            width: 80%;
+            position: relative;
+        }
+
+        /* Close button styling */
+        .close {
+            position: absolute;
+            left: 20px;
+            top: 10px;
+            color: #aaa;
+            font-size: 38px;
+            font-weight: bold;
+            cursor: pointer;  /* Ensure the close button is clickable */
+            z-index: 10001;  /* Make sure the close button is on top */
+        }
+
+        .close:hover,
+        .close:focus {
+            color: black;
+            text-decoration: none;
+        }
+
+        #chart {
+            width: 100%;
+            height: 400px;
+        }
+
+        /* Geocoder input box */
+        .leaflet-control-geosearch {
+            background-color: white;
+            border-radius: 5px;
+            width: 300px;
+        }
+    </style>
+</head>
+<body>
+    <h1>N2O Emission in Denmark (2011-2020)</h1>
+    
+    <!-- Map container -->
+    <div id="map"></div>
+    
+    <!-- Modal for displaying N2O emission chart -->
+    <div id="myModal" class="modal">
+        <div class="modal-content">
+            <span class="close">&times;</span>  <!-- Close button -->
+            <div id="chart"></div>
+        </div>
+    </div>
+
+    <script>
+        // Initialize the Leaflet map
+        const map = L.map('map').setView([55.58, 11.46], 7.1);  // Centered at Denmark with zoom level 6
+
+        // Load OpenStreetMap tiles
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            attribution: '© OpenStreetMap contributors'
+        }).addTo(map);
+
+        // Add markers for Danish regions with N2O data
+        const regions = {
+            'Hovedstaden': [55.6761, 12.5683],
+            'Sjælland': [55.4038, 11.4541],
+            'Syddanmark': [55.3649, 10.3833],
+            'Midtjylland': [56.1629, 10.2039],
+            'Nordjylland': [57.0488, 9.9187]
+        };
+
+        // Loop through the regions and add markers
+        for (const region in regions) {
+            const marker = L.marker(regions[region]).addTo(map).bindPopup(region);
+            marker.on('click', function() {
+                showModal(region);
+            });
+        }
+
+        //L.Control.geocoder().addTo(map);
+
+
+        // Add the GeoSearch control for searching locations
+        const provider = new window.GeoSearch.OpenStreetMapProvider();
+        const searchControl = new window.GeoSearch.GeoSearchControl({
+            provider: provider,
+            style: 'bar',
+            autoComplete: true,
+            autoCompleteDelay: 250,
+            searchLabel: 'Search for a location'
+        });
+
+        map.addControl(searchControl); 
+
+        // Debugging to see if the search control is initializing
+        console.log("Search control initialized!");
+
+        
+
+        
+
+        // Function to show the modal with N2O emission chart
+        function showModal(region) {
+            const modal = document.getElementById("myModal");
+            modal.style.display = "block";  // Show modal
+
+            // Fetch the N2O emission data for the region
+            $.getJSON(`/n2o_data/${region}`, function(data) {
+                console.log(data);  // Log data to see if it is being returned correctly
+
+                // Check if data is empty
+                if (data.length === 0) {
+                    alert("No data available for this region.");
+                    return;
+                }
+
+                const years = data.map(d => d.Year);
+                const emissions = data.map(d => d.Emission);
+
+                const trace = {
+                    x: years,
+                    y: emissions,
+                    type: 'bar'
+                };
+
+                const layout = {
+                    title: `N2O Emission in ${region}`,
+                    xaxis: { title: 'Year' },
+                    yaxis: { title: 'N2O Emission (tons)' },
+                    responsive: true
+                };
+
+                Plotly.newPlot('chart', [trace], layout);
+
+                // Force the plot to resize when modal is shown
+                Plotly.relayout('chart', { width: $("#chart").width(), height: $("#chart").height() });
+            }).fail(function() {
+                alert("Error loading data for " + region);
+            });
+
+            // Close modal when close button is clicked
+            const closeButton = document.getElementsByClassName("close")[0];
+            closeButton.onclick = function() {
+                modal.style.display = "none";
+            };
+        }
+
+        // Close modal when clicking outside the modal content
+        window.onclick = function(event) {
+            const modal = document.getElementById("myModal");
+            if (event.target == modal) {
+                modal.style.display = "none";
+            }
+        }
+    </script>
+</body>
+</html>
